@@ -1,7 +1,8 @@
 import numpy as np
-
+from socket import *
 ROW_NUMBER = 6
 COLUMN_NUMBER = 7
+
 def printBoard(board):
     """
     This function prints the string representation of the board
@@ -105,28 +106,67 @@ def checkWinCondition(board, r, c, player):
     if diagonalBRWin == 4: return 'bottomRight'
     return None
 
-
-if __name__ == '__main__':
+def localVersus():
     """
-    Main function
+    This function is used when user wants to play local multiplayer
+    :return: null
     """
-    connectFourBoard = np.zeros((6,7))
-
+    connectFourBoard = np.zeros((ROW_NUMBER, COLUMN_NUMBER))
     playerTurn = True
     winCon = None
     printBoard(connectFourBoard)
+
     while not winCon:
         if playerTurn:
             token = 1
         else:
             token = 2
-        playerInput = int(input("Enter column number"))
+
+        print(f"Player {token}'s turn")
+        playerInput = int(input("Enter column number: "))
         dropToken(connectFourBoard, playerInput, token)
+
         for x in range(connectFourBoard.shape[0]):
             for y in range(connectFourBoard.shape[1]):
-                winCon = checkWinCondition(connectFourBoard,x,y,token)
+                winCon = checkWinCondition(connectFourBoard, x, y, token)
                 if winCon:
-                    print(winCon)
                     break
+            if winCon:
+                print(f"Player {token} wins because of {winCon}")
+                break
+
         playerTurn = not playerTurn
         printBoard(connectFourBoard)
+
+def onlineVersus():
+    """
+    This function is used when user wants to play multiplayer online
+    :return:
+    """
+    # Set user address info
+    userSocket = socket(AF_INET, SOCK_DGRAM)
+    userPort = int(input("Please enter your desired port number: "))
+    userSocket.bind(('localhost', userPort))
+
+    print("Are you hosting or are you connecting?")
+    print("1. Connecting")
+    print("2. Hosting")
+    playerNumber = int(input("Select your answer (#): "))
+
+    if playerNumber == 1:
+        opponentPort = int(input("Please enter opponent's port number: "))
+        userSocket.sendto("Hello".encode(), ('localhost', opponentPort))
+
+    else:
+        print(f"You are hosting on {userSocket.getsockname()}")
+        while True:
+            message, clientAddress = userSocket.recvfrom(2048)
+            userMessage = message.decode()
+            print(userMessage)
+
+
+if __name__ == '__main__':
+    """
+    Main function
+    """
+    onlineVersus()

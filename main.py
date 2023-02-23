@@ -1,10 +1,12 @@
+import math
 import signal
-
+import random
 import numpy as np
 from socket import *
 ROW_NUMBER = 6
 COLUMN_NUMBER = 7
 IP_ADDRESS = 'localhost'
+CPU_DEPTH = 5
 
 def printBoard(board):
     """
@@ -147,7 +149,7 @@ def localVersus():
 
         # Input validation to place token
         playerInput = input("Enter column number: ")
-        if playerInput.isdigit() and int(playerInput) < COLUMN_NUMBER:
+        if playerInput.isdigit() and int(playerInput) < COLUMN_NUMBER and connectFourBoard[0][int(playerInput)] == 0:
             dropToken(connectFourBoard, int(playerInput), token)
 
             # Check if opponent has won yet
@@ -158,9 +160,11 @@ def localVersus():
             # Switch to other player's turn
             playerTurn = not playerTurn
 
-
 def onlineVersus():
-
+    """
+    This function is used when user wants to play online multiplayer
+    :return: null
+    """
     def handler(signum, frame):
         """This function is the signal handler for a SIGINT signal"""
 
@@ -218,7 +222,7 @@ def onlineVersus():
                 # Input validation to place token
                 while True:
                     playerInput = (input("It's your turn; Enter column number: "))
-                    if playerInput.isdigit() and int(playerInput) < COLUMN_NUMBER:
+                    if playerInput.isdigit() and int(playerInput) < COLUMN_NUMBER and connectFourBoard[0][int(playerInput)] == 0:
                         break
 
                 # Drop token and send input to opponent
@@ -251,7 +255,7 @@ def onlineVersus():
                 # Input validation to place token
                 while True:
                     playerInput = (input("It's your turn; Enter column number: "))
-                    if playerInput.isdigit() and int(playerInput) < COLUMN_NUMBER:
+                    if playerInput.isdigit() and int(playerInput) < COLUMN_NUMBER and connectFourBoard[0][int(playerInput)] == 0:
                         break
 
                 # Drop token and send input to opponent
@@ -280,8 +284,222 @@ def onlineVersus():
                         print(f"Player 1 wins because of {winCon}")
                         break
 
+def aiVersus():
+    """
+    This function is used when the player wants to versus the minimax AI
+    :return: null
+    """
+
+    def checkScore(section, token):
+        """
+        Calculates the heuristic score of a section of the board by counting the number of player pieces
+        :param section: List containing four consecutive positions in the ConnectFour grid
+        :param token: The token value you're determining the score for
+        :return: The heuristic score
+        """
+
+        score = 0
+        opponentToken = 1
+        if token == 1: opponentToken = 2
+
+        # Add score if move will benefit the current player
+        if section.count(token) == 4: score += 100
+        elif section.count(token) == 3 and section.count(0) == 1: score += 5
+        elif section.count(token) == 2 and section.count(0) == 2: score += 2
+
+        # Subtract score if move will harm the current player
+        if section.count(opponentToken) == 3 and section.count(0) == 1: score -= 4
+
+        # Return score
+        return score
+
+    def scorePosition(board, token):
+        """
+        Calculates the heuristic score of the entire board
+        :param board: The ConnectFour board
+        :param token: The token value you're determining the score for
+        :return: The total score of the board
+        """
+
+        score = 0
+
+        # Add score for center column
+        center = [int(x) for x in list(board[:, COLUMN_NUMBER // 2])]
+        centerCount = center.count(token)
+        score += centerCount * 3
+
+        # Add score for horizontal sections
+        for r in range(ROW_NUMBER):
+            horizontal = [int(i) for i in list(board[r, :])]
+            for c in range(COLUMN_NUMBER - 3):
+                section = horizontal[c:c + 4]
+                score += checkScore(section, token)
+
+        # Add score for vertical sections
+        for c in range(COLUMN_NUMBER):
+            column = [int(i) for i in list(board[:, c])]
+            for r in range(ROW_NUMBER - 3):
+                section = column[r:r + 4]
+                score += checkScore(section, token)
+
+        # Add score for right diagonal
+        for r in range(ROW_NUMBER - 3):
+            for c in range(COLUMN_NUMBER - 3):
+                section = [board[r + i][c + i] for i in range(4)]
+                score += checkScore(section, token)
+
+        # Add scope for left diagonal
+        for r in range(ROW_NUMBER - 3):
+            for c in range(COLUMN_NUMBER - 3):
+                section = [board[r + 3 - i][c + i] for i in range(4)]
+                score += checkScore(section, token)
+
+        # Return total score
+        return score
+
+    def getOpenColumns(board):
+        """
+        Return an array of open columns
+        :param board: TheConnectFour board
+        :return: An array of open columns
+        """
+        openColumns = []
+        for column in range(COLUMN_NUMBER):
+            if board[0][column] == 0: openColumns.append(column)
+        return openColumns
+
+    def isTerminal(board):
+        """
+        Check if current node is a terminal node
+        :param board: The ConnectFour board
+        :return: A boolean representing if node is terminal
+        """
+        if checkBoard(board, 1) or checkBoard(board, 2) or len(getOpenColumns(board)) == 0: return True
+        else: return False
+
+    def minimax(board, depth, alpha, beta, maximizingPlayer):
+        """
+        The minimax algorithm used to determine the optimal move for the CPU
+        :param board: The ConnectFour board
+        :param depth: The maximum depth
+        :param alpha: Highest value (infinity)
+        :param beta: Lowest value (-infinity)
+        :param maximizingPlayer: Start as maximizer or minimizer
+        :return: A tuple representing the optimal move and its score value
+        """
+        # Get remaining open columns
+        validLoc = getOpenColumns(board)
+
+        # Return if at terminal node
+        isTerm = isTerminal(board)
+        if depth == 0 or isTerm:
+            if isTerm:
+                if checkBoard(board, 2):
+                    return None, 100000000000000
+                elif checkBoard(board, 1):
+                    return None, -10000000000000
+                else:  # Game is over, no more valid moves
+                    return None, 0
+            else:  # Depth is zero
+                return None, scorePosition(board, 2)
+
+        # Maximizing player
+        if maximizingPlayer:
+            value = -math.inf
+            column = random.choice(validLoc)
+
+            # Only check for actual playable columns to improve performance
+            for col in validLoc:
+                boardCopy = board.copy()
+                dropToken(boardCopy, col, 2)
+                new_score = minimax(boardCopy, depth - 1, alpha, beta, False)[1]
+                if new_score > value:
+                    value = new_score
+                    column = col
+                alpha = max(alpha, value)
+                if alpha >= beta:
+                    break
+            return column, value
+
+        # Minimizing player
+        else:
+            value = math.inf
+            column = random.choice(validLoc)
+
+            # Only check for actual playable columns to improve performance
+            for col in validLoc:
+                boardCopy = board.copy()
+                dropToken(boardCopy, col, 1)
+                new_score = minimax(boardCopy, depth - 1, alpha, beta, True)[1]
+                if new_score < value:
+                    value = new_score
+                    column = col
+                beta = min(beta, value)
+                if alpha >= beta:
+                    break
+            return column, value
+
+    # Start fresh board
+    connectFourBoard = np.zeros((ROW_NUMBER, COLUMN_NUMBER))
+    winCon = None
+    playerTurn = True
+
+    while not winCon:
+
+        printBoard(connectFourBoard)
+
+        # Player's turn
+        if playerTurn:
+            print(f"Player's turn")
+            # Input validation to place token
+            playerInput = input("Enter column number: ")
+            if playerInput.isdigit() and int(playerInput) < COLUMN_NUMBER and connectFourBoard[0][int(playerInput)] == 0:
+                dropToken(connectFourBoard, int(playerInput), 1)
+
+                # Check if win condition has been met yet
+                winCon = checkBoard(connectFourBoard, 1)
+                if winCon:
+                    printBoard(connectFourBoard)
+                    print(f"Player wins because of {winCon}")
+
+        # CPU's turn
+        else:
+            print(f"Opponent's turn")
+            # Use minimax algorithm
+            col, minimax_score = minimax(connectFourBoard, CPU_DEPTH, -math.inf, math.inf, True)
+            if connectFourBoard[0][col] == 0:
+                dropToken(connectFourBoard, col, 2)
+
+                # Check if win condition has been met yet
+                winCon = checkBoard(connectFourBoard, 2)
+                if winCon:
+                    printBoard(connectFourBoard)
+                    print(f"CPU wins because of {winCon}")
+
+        # Switch to other player's turn
+        playerTurn = not playerTurn
+
 if __name__ == '__main__':
     """
     Main function
     """
-    onlineVersus()
+    print("Welcome to ConnectFour, please select your mode...\n"
+          "1) CPU Opponent\n"
+          "2) Local Multiplayer\n"
+          "3) Online multiplayer\n")
+    choice = int(input("Select the number: "))
+    if choice == 1:   aiVersus()
+    elif choice == 2: localVersus()
+    elif choice == 3: onlineVersus()
+    else:             print("Bad selection, exiting.")
+    """
+    match choice:
+        case 1:
+            aiVersus()
+        case 2:
+            localVersus()
+        case 3:
+            onlineVersus()
+        case _:
+            print("Bad selection, exiting.")
+    """
